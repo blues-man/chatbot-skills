@@ -16,7 +16,7 @@ metadata:
     pipelinesascode.tekton.dev/task: "git-clone"
 
     # Use maven task from the hub to test our Java project
-    pipelinesascode.tekton.dev/task-1: "maven"
+    pipelinesascode.tekton.dev/task-1: "https://raw.githubusercontent.com/tektoncd/catalog/refs/heads/main/task/maven/0.4/maven.yaml"
 
     # You can add more tasks by increasing the suffix number, you can specify
     # them as array to have multiple of them.
