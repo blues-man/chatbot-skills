@@ -2,78 +2,272 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: chatbot-app
+  name: chatbot-app-build
+  labels:
+    backstage.io/kubernetes-id: chatbot-app
   annotations:
-    # The event we are targeting as seen from the webhook payload
-    # this can be an array too, i.e: [pull_request, push]
-    pipelinesascode.tekton.dev/on-event: "[pull_request, push]"
-
-    # The branch or tag we are targeting (ie: main, refs/tags/*)
+    pipelinesascode.tekton.dev/on-event: "[push]"
     pipelinesascode.tekton.dev/on-target-branch: "[master,main]"
-
-    # Fetch the git-clone task from hub, we are able to reference later on it
-    # with taskRef and it will automatically be embedded into our pipeline.
     pipelinesascode.tekton.dev/task: "https://raw.githubusercontent.com/tektoncd/catalog/refs/heads/main/task/git-clone/0.10/git-clone.yaml"
-
-    # Use maven task from the hub to test our Java project
     pipelinesascode.tekton.dev/task-1: "https://raw.githubusercontent.com/tektoncd/catalog/refs/heads/main/task/maven/0.4/maven.yaml"
-
-    # You can add more tasks by increasing the suffix number, you can specify
-    # them as array to have multiple of them.
-    # browse the tasks you want to include from hub on https://hub.tekton.dev/
-    #
-    # pipelinesascode.tekton.dev/task-2: "[curl, buildah]"
-
-    # How many runs we want to keep attached to this event
+    pipelinesascode.tekton.dev/task-2: "https://api.hub.tekton.dev/v1/resource/tekton/task/buildah/0.5/raw"
     pipelinesascode.tekton.dev/max-keep-runs: "5"
 spec:
   params:
-    # The variable with brackets are special to Pipelines as Code
-    # They will automatically be expanded with the events from Github.
-    - name: repo_url
+    - name: source-repo
       value: "{{ repo_url }}"
-    - name: revision
+    - name: source-branch
       value: "{{ revision }}"
+    - name: output-image
+      value: "quay-d589v.apps.cluster-d589v.d589v.sandbox657.opentlc.com/quayadmin/chatbot-app"
+    - name: sonarqube-host-url
+      value: ""
+    - name: sonarqube-project-key
+      value: ""
+    - name: sonarqube-project-secret
+      value: ""
+    - name: cyclonedx-host-url
+      value: ""
+    - name: stackrox-endpoint
+      value: ""
+    - name: stackrox-secret
+      value: ""
+    - name: git-host
+      value: ""
+    - name: git-owner
+      value: ""
+    - name: component-id
+      value: "chatbot-app"
+    - name: common-password-secret
+      value: ""
+    - name: rekor-url
+      value: ""
+    - name: tuf-mirror
+      value: ""
+    - name: certificate-identity
+      value: ""
+    - name: oidc-issuer
+      value: ""
+    - name: maven-image
+      value: ""
   pipelineSpec:
     params:
-      - name: repo_url
-      - name: revision
-    workspaces:
-      - name: source
-      - name: basic-auth
-      - name: maven-settings
+      - name: source-repo
+        description: source repo that contains the application code
+        type: string
+      - name: source-branch
+        description: source branch to build from
+        type: string
+      - name: output-image
+        description: reference of the image that will get created
+        type: string
+      - name: sonarqube-host-url
+        type: string
+      - name: sonarqube-project-key
+        type: string
+      - name: sonarqube-project-secret
+        type: string
+      - name: cyclonedx-host-url
+        type: string
+      - name: stackrox-endpoint
+        type: string
+      - name: stackrox-secret
+        type: string
+      - name: git-host
+        type: string
+      - name: git-owner
+        type: string
+      - name: component-id
+        type: string
+      - name: common-password-secret
+        type: string
+      - name: rekor-url
+        type: string
+      - name: tuf-mirror
+        type: string
+      - name: certificate-identity
+        type: string
+      - name: oidc-issuer
+        type: string
+      - name: maven-image
+        type: string
     tasks:
-      - name: fetch-repository
+      - name: git-clone
+        params:
+          - name: url
+            value: $(params.source-repo)
+          - name: revision
+            value: $(params.source-branch)
         taskRef:
           name: git-clone
         workspaces:
           - name: output
-            workspace: source
-          - name: basic-auth
-            workspace: basic-auth
+            workspace: source-folder
+      - name: package
+        runAfter:
+          - git-clone
         params:
-          - name: url
-            value: $(params.repo_url)
-          - name: revision
-            value: $(params.revision)
-      - name: maven-test
+          - name: MAVEN_IMAGE
+            value: $(params.maven-image)
         taskRef:
           name: maven
-        runAfter:
-          - fetch-repository
-        params:
-          - name: GOALS
-            value:
-              - test
         workspaces:
           - name: source
-            workspace: source
+            workspace: source-folder
           - name: maven-settings
             workspace: maven-settings
+      - name: scan-source
+        params:
+          - name: sonarqubeHostUrl
+            value: $(params.sonarqube-host-url)
+          - name: sonarqubeProjectKey
+            value: $(params.sonarqube-project-key)
+          - name: sonarqubeProjectSecret
+            value: $(params.sonarqube-project-secret)
+        runAfter:
+          - package
+        taskRef:
+          name: scan-code
+        workspaces:
+          - name: repository
+            workspace: source-folder
+      - name: build-sign-image
+        params:
+          - name: IMAGE
+            value: $(params.output-image)
+        runAfter:
+          - scan-source
+        taskRef:
+          name: buildah
+        workspaces:
+          - name: source
+            workspace: source-folder
+      - name: upload-sbom-to-tpa
+        runAfter:
+          - build-sign-image
+        taskRef:
+          name: upload-sbom-to-tpa
+        params:
+          - name: COMPONENT_ID
+            value: $(params.component-id)
+        workspaces:
+          - name: sboms
+            workspace: source-folder
+      - name: upload-sbom-to-cyclonedx-repo
+        params:
+          - name: cyclonedxHostUrl
+            value: $(params.cyclonedx-host-url)
+          - name: image
+            value: $(params.output-image)@$(tasks.build-sign-image.results.IMAGE_DIGEST)
+        runAfter:
+          - build-sign-image
+        taskRef:
+          name: upload-sbom-to-cyclonedx-repo
+        workspaces:
+          - name: repository
+            workspace: source-folder
+      - name: acs-image-check
+        params:
+          - name: rox_central_endpoint
+            value: $(params.stackrox-endpoint)
+          - name: rox_api_token
+            value: $(params.stackrox-secret)
+          - name: image
+            value: $(params.output-image)
+          - name: insecure-skip-tls-verify
+            value: "true"
+          - name: image_digest
+            value: $(tasks.build-sign-image.results.IMAGE_DIGEST)
+        runAfter:
+          - upload-sbom-to-tpa
+          - upload-sbom-to-cyclonedx-repo
+        taskRef:
+          name: acs-image-check
+        workspaces:
+          - name: reports
+            workspace: reports
+      - name: acs-image-scan
+        params:
+          - name: rox_central_endpoint
+            value: $(params.stackrox-endpoint)
+          - name: rox_api_token
+            value: $(params.stackrox-secret)
+          - name: image
+            value: $(params.output-image)
+          - name: insecure-skip-tls-verify
+            value: "true"
+          - name: image_digest
+            value: $(tasks.build-sign-image.results.IMAGE_DIGEST)
+        runAfter:
+          - upload-sbom-to-tpa
+          - upload-sbom-to-cyclonedx-repo
+        taskRef:
+          name: acs-image-scan
+        workspaces:
+          - name: reports
+            workspace: reports
+      - name: acs-deploy-check
+        params:
+          - name: rox_central_endpoint
+            value: $(params.stackrox-endpoint)
+          - name: rox_api_token
+            value: $(params.stackrox-secret)
+          - name: git_host
+            value: $(params.git-host)
+          - name: git_owner
+            value: $(params.git-owner)
+          - name: component_id
+            value: $(params.component-id)
+          - name: common_password_secret
+            value: $(params.common-password-secret)
+          - name: insecure-skip-tls-verify
+            value: "true"
+        taskRef:
+          name: acs-deploy-check
+        runAfter:
+          - upload-sbom-to-tpa
+          - upload-sbom-to-cyclonedx-repo
+        workspaces:
+          - name: reports
+            workspace: reports
+      - name: query-rekor-signed-provenance
+        params:
+          - name: imageDigest
+            value: $(tasks.build-sign-image.results.IMAGE_DIGEST)
+          - name: rekorUrl
+            value: $(params.rekor-url)
+        taskRef:
+          name: rekor-signed-provenance
+        runAfter:
+          - acs-image-check
+          - acs-image-scan
+          - acs-deploy-check
+      - name: resync
+        params:
+          - name: COMPONENT_ID
+            value: $(params.component-id)
+        runAfter:
+          - query-rekor-signed-provenance
+        taskRef:
+          name: resync
+    results:
+      - name: IMAGE_URL
+        value: "$(tasks.build-sign-image.results.IMAGE_URL)"
+      - name: IMAGE_DIGEST
+        value: "$(tasks.build-sign-image.results.IMAGE_DIGEST)"
+      - name: CHAINS-GIT_URL
+        value: "$(tasks.git-clone.results.url)"
+      - name: CHAINS-GIT_COMMIT
+        value: "$(tasks.git-clone.results.commit)"
+      - name: ACS_SCAN_OUTPUT
+        value: "$(tasks.acs-image-scan.results.SCAN_OUTPUT)"
+    workspaces:
+      - name: source-folder
+      - name: maven-settings
+      - name: docker-config
+      - name: reports
   workspaces:
-    - name: maven-settings
-      emptyDir: {}
-    - name: source
+    - name: source-folder
       volumeClaimTemplate:
         spec:
           accessModes:
@@ -81,8 +275,12 @@ spec:
           resources:
             requests:
               storage: 1Gi
-    # This workspace will inject secret to help the git-clone task to be able to
-    # checkout the private repositories
+    - name: maven-settings
+      emptyDir: {}
+    - name: docker-config
+      emptyDir: {}
+    - name: reports
+      emptyDir: {}
     - name: basic-auth
       secret:
         secretName: "{{ git_auth_secret }}"
