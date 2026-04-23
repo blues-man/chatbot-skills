@@ -1,6 +1,5 @@
 # langchain4j-demo
 
-
 This example leverages a LLM running on vLLM.
 
 Create a .env file with the appropriate settings for:
