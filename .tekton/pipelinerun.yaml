@@ -130,7 +130,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: scan-code
             - name: namespace
@@ -156,7 +156,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: upload-sbom-to-tpa
             - name: namespace
@@ -179,7 +179,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: upload-sbom-to-cyclonedx-repo
             - name: namespace
@@ -206,7 +206,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: acs-image-check
             - name: namespace
@@ -233,7 +233,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: acs-image-scan
             - name: namespace
@@ -261,7 +261,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: acs-deploy-check
             - name: namespace
@@ -282,7 +282,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: rekor-signed-provenance
             - name: namespace
@@ -301,7 +301,7 @@ spec:
           resolver: cluster
           params:
             - name: kind
-              value: Task
+              value: task
             - name: name
               value: resync
             - name: namespace
