@@ -21,35 +21,35 @@ spec:
     - name: output-image
       value: "quay-d589v.apps.cluster-d589v.d589v.sandbox657.opentlc.com/quayadmin/chatbot-app"
     - name: sonarqube-host-url
-      value: ""
+      value: https://sonarqube-sonarqube.apps.cluster-d589v.d589v.sandbox657.opentlc.com
     - name: sonarqube-project-key
-      value: ""
+      value: chatbot-app
     - name: sonarqube-project-secret
-      value: ""
+      value: chatbot-app-sonarqube-secret
     - name: cyclonedx-host-url
-      value: ""
+      value: https://cyclonedx-bom-repo-server-cyclonedx.apps.cluster-d589v.d589v.sandbox657.opentlc.com
     - name: stackrox-endpoint
-      value: ""
+      value: central-stackrox.apps.cluster-d589v.d589v.sandbox657.opentlc.com:443
     - name: stackrox-secret
-      value: ""
+      value: chatbot-app-stackrox-token
     - name: git-host
-      value: ""
+      value: gitlab-gitlab.apps.cluster-d589v.d589v.sandbox657.opentlc.com
     - name: git-owner
-      value: ""
+      value: development
     - name: component-id
-      value: "chatbot-app"
+      value: chatbot-app
     - name: common-password-secret
-      value: ""
+      value: common-password-secret
     - name: rekor-url
-      value: ""
+      value: http://rekor-server.trusted-artifact-signer.svc
     - name: tuf-mirror
-      value: ""
+      value: http://tuf.trusted-artifact-signer.svc
     - name: certificate-identity
-      value: ""
+      value: $(tt.params.git-committer)
     - name: oidc-issuer
-      value: ""
+      value: https://keycloak-rhsso.apps.cluster-d589v.d589v.sandbox657.opentlc.com/auth/realms/openshift
     - name: maven-image
-      value: ""
+      value: registry.redhat.io/ubi9/openjdk-21
   pipelineSpec:
     params:
       - name: source-repo
@@ -127,7 +127,14 @@ spec:
         runAfter:
           - package
         taskRef:
-          name: scan-code
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: scan-code
+            - name: namespace
+              value: chatbot-app-dev
         workspaces:
           - name: repository
             workspace: source-folder
@@ -146,7 +153,14 @@ spec:
         runAfter:
           - build-sign-image
         taskRef:
-          name: upload-sbom-to-tpa
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: upload-sbom-to-tpa
+            - name: namespace
+              value: chatbot-app-dev
         params:
           - name: COMPONENT_ID
             value: $(params.component-id)
@@ -162,7 +176,14 @@ spec:
         runAfter:
           - build-sign-image
         taskRef:
-          name: upload-sbom-to-cyclonedx-repo
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: upload-sbom-to-cyclonedx-repo
+            - name: namespace
+              value: chatbot-app-dev
         workspaces:
           - name: repository
             workspace: source-folder
@@ -182,7 +203,14 @@ spec:
           - upload-sbom-to-tpa
           - upload-sbom-to-cyclonedx-repo
         taskRef:
-          name: acs-image-check
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: acs-image-check
+            - name: namespace
+              value: chatbot-app-dev
         workspaces:
           - name: reports
             workspace: reports
@@ -202,7 +230,14 @@ spec:
           - upload-sbom-to-tpa
           - upload-sbom-to-cyclonedx-repo
         taskRef:
-          name: acs-image-scan
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: acs-image-scan
+            - name: namespace
+              value: chatbot-app-dev
         workspaces:
           - name: reports
             workspace: reports
@@ -223,7 +258,14 @@ spec:
           - name: insecure-skip-tls-verify
             value: "true"
         taskRef:
-          name: acs-deploy-check
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: acs-deploy-check
+            - name: namespace
+              value: chatbot-app-dev
         runAfter:
           - upload-sbom-to-tpa
           - upload-sbom-to-cyclonedx-repo
@@ -237,7 +279,14 @@ spec:
           - name: rekorUrl
             value: $(params.rekor-url)
         taskRef:
-          name: rekor-signed-provenance
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: rekor-signed-provenance
+            - name: namespace
+              value: chatbot-app-dev
         runAfter:
           - acs-image-check
           - acs-image-scan
@@ -249,7 +298,14 @@ spec:
         runAfter:
           - query-rekor-signed-provenance
         taskRef:
-          name: resync
+          resolver: cluster
+          params:
+            - name: kind
+              value: Task
+            - name: name
+              value: resync
+            - name: namespace
+              value: chatbot-app-dev
     results:
       - name: IMAGE_URL
         value: "$(tasks.build-sign-image.results.IMAGE_URL)"
