@@ -109,6 +109,10 @@ spec:
         params:
           - name: MAVEN_IMAGE
             value: $(params.maven-image)
+          - name: GOALS
+            value:
+              - -Dmaven.repo.local=$(workspaces.maven-settings.path)/.m2
+              - package
         taskRef:
           name: maven
         workspaces:
